@@ -91,7 +91,7 @@ window.renderFrame = (t) => {
       g.fillStyle = live ? '#13241a' : '#1c1312'; rr(x + 30, y + 30, 120, 120, 20); g.fill()
       if (live) { g.strokeStyle = '#4ade80'; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + 62, y + 92); g.lineTo(x + 82, y + 112); g.lineTo(x + 120, y + 66); g.stroke() }
       else { g.strokeStyle = RED; g.lineWidth = 7; g.beginPath(); g.arc(x + 90, y + 78, 18, Math.PI, 0); g.stroke(); g.fillStyle = RED; rr(x + 62, y + 78, 56, 44, 7); g.fill() }
-      g.fillStyle = INK; g.font = '900 64px Archivo'; g.fillText(live ? 'LIVE ON PUMP.FUN' : '$????', x + 180, y + 102)
+      g.fillStyle = INK; g.font = '900 54px Archivo'; g.fillText(live ? 'LIVE ON PUMP.FUN' : '$????', x + 180, y + 100)
       g.fillStyle = live ? '#4ade80' : DIM; g.font = '600 26px "JetBrains Mono"'; g.fillText(live ? 'fired the second it hit' : 'sealed until it fires', x + 182, y + 145)
       g.fillStyle = AMB; g.font = '600 24px "JetBrains Mono"'; g.fillText('trigger: a headline with “your words”', x + 30, y + 220)
       g.fillStyle = 'rgba(255,255,255,.08)'; rr(x + 30, y + 245, 780, 10, 5); g.fill(); g.fillStyle = live ? '#4ade80' : RED; rr(x + 30, y + 245, 780 * Math.min(1, seg(t, 5.6, 6.45) + live), 10, 5); g.fill()
