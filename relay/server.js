@@ -7,7 +7,7 @@ import { createCodes } from "./codes.js"
 const MAX_RECORDS = 60            // launches kept per dev
 const DEEP_TTL = 6 * 3600_000
 
-export function createRelay({ rpcUrl, openSocket, store, publicUrl, siteUrl = "https://launchcode.vercel.app" }) {
+export function createRelay({ rpcUrl, openSocket, store, publicUrl, siteUrl = "https://launchcode-fun.vercel.app" }) {
   const feed = new Feed()
   let sol = 0, solAt = 0, live = false, lastMsg = 0
   const recCache = new Map()      // dev -> records (mirror of the store)

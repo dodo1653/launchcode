@@ -143,7 +143,7 @@ except TypeError: pass
 sc.use_nodes = True
 try:
     tree = sc.node_tree; rl = tree.nodes.get("Render Layers"); comp = tree.nodes.get("Composite")
-    gl = tree.nodes.new("CompositorNodeGlare"); gl.glare_type = "FOG_GLOW"; gl.quality = "HIGH"; gl.threshold = 1.0; gl.size = 7
+    gl = tree.nodes.new("CompositorNodeGlare"); gl.glare_type = "FOG_GLOW"; gl.quality = "HIGH" if MODE == "still" else "LOW"; gl.threshold = 1.0; gl.size = 7
     try: gl.mix = -0.5
     except Exception: pass
     tree.links.new(rl.outputs["Image"], gl.inputs["Image"]); tree.links.new(gl.outputs["Image"], comp.inputs["Image"])
