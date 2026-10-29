@@ -1,8 +1,8 @@
-// LAUNCHCODE relay: the live pump.fun feed + anti-vamp + launch metadata hosting + armed launches and their triggers.
+// LAUNCHCODE relay: the live pump.fun feed + anti-vamp + launch metadata hosting + armed launches with public seats in the launch bundle.
 // Shared by the Node dev server (dev.mjs) and the Cloudflare Worker (worker.js). `store` is persistent key/value
 // storage (Durable Object storage in the Worker, a Map locally).
 import { Feed, PUMP, fetchMeta, devHistory } from "./core.js"
-import { createCodes } from "./codes.js"
+import { createLaunches } from "./launches.js"
 
 const MAX_RECORDS = 60            // launches kept per dev
 const DEEP_TTL = 6 * 3600_000
@@ -99,7 +99,7 @@ export function createRelay({ rpcUrl, openSocket, store, publicUrl, siteUrl = "h
     if (!sig) throw new Error("not sent")
     return sig
   }
-  const launches = createCodes({ feed, store, rpc, sendRaw, getSol: () => sol })
+  const launches = createLaunches({ feed, store, rpc, sendRaw })
 
   // ---------------------------------------------------------------- the loop
   let ticks = 0
@@ -153,16 +153,20 @@ export function createRelay({ rpcUrl, openSocket, store, publicUrl, siteUrl = "h
     if (mm) { const j = await store.get("meta:" + mm[1]); return j ? new Response(j, { headers: { "content-type": "application/json", "cache-control": "public, max-age=31536000, immutable", ...CORS } }) : json({ error: "not found" }, 404) }
     if (im) { const x = await store.get("img:" + im[1]); return x ? new Response(x.bytes, { headers: { "content-type": x.type, "cache-control": "public, max-age=31536000, immutable", ...CORS } }) : json({ error: "not found" }, 404) }
 
-    if (u.pathname === "/v1/codes") {
-      // proof the relay is on the chain right now: the slot it last saw, the newest pump.fun launch, its checks
-      let n1h = 0, newest = null
-      for (const c of feed.coins.values()) { if (Date.now() - c.at < 3600_000) n1h++; if (!newest || c.at > newest.at) newest = c }
-      const chain = { slot: lastSlot, slotAt, launches1h: n1h, newest: newest ? { symbol: newest.symbol, name: newest.name, img: newest.meta?.image || null, at: newest.at, mint: newest.mint } : null, solAt }
-      return json({ ...launches.state(), live, sol, watched: feed.coins.size, chain })
+    if (u.pathname === "/v1/launches") {
+      // the last hour on pump.fun: how many launches had bots buying within two slots of creation
+      let n = 0, sniped = 0, snipeSol = 0, snipeBuys = 0
+      for (const c of feed.coins.values()) if (Date.now() - c.at < 3600_000 && Date.now() - c.at > 15_000) { n++; if (c.snipe) { sniped++; snipeSol += c.snipeSol || 0; snipeBuys += c.snipe } }
+      // proof the relay is on the chain right now: the slot it last saw and the newest pump.fun launch
+      // never show a slur or an obscene name on the page
+      const CRUDE = /(n[i1]gg|f[a@]gg?ot|retard|rape|hitler|nazi|kike|chink|spic|tranny|porn|cum|fuck|shit|cock|dick|pussy|cunt|boob|tits|sex|anal|penis|vagina|whore|slut)/i
+      let newest = null; for (const c of feed.coins.values()) if ((!newest || c.at > newest.at) && !CRUDE.test(c.symbol + " " + c.name)) newest = c
+      const chain = { slot: lastSlot, slotAt, launches1h: n, newest: newest ? { symbol: newest.symbol, name: newest.name, img: newest.meta?.image || null, at: newest.at, mint: newest.mint, snipe: newest.snipe || 0 } : null, solAt }
+      return json({ ...launches.state(), live, sol, watched: feed.coins.size, hour: { launches: n, sniped, snipeSol: +snipeSol.toFixed(1), snipeBuys }, chain })
     }
-    if (u.pathname === "/v1/arm" && req.method === "POST") {
+    if ((u.pathname === "/v1/submit" || u.pathname === "/v1/seat") && req.method === "POST") {
       let b; try { b = await req.json() } catch { return json({ error: "bad json" }, 400) }
-      try { return json(await launches.arm(b)) } catch (e) { return json({ error: String(e.message || e).slice(0, 240) }, 400) }
+      try { return json(u.pathname === "/v1/submit" ? await launches.submit(b) : await launches.seat(b)) } catch (e) { return json({ error: String(e.message || e).slice(0, 240) }, 400) }
     }
     // a read-only window onto the chain for the page (nonce accounts, lookup tables, rent, confirmations)
     if (u.pathname === "/v1/rpc" && req.method === "POST") {

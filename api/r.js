@@ -2,8 +2,8 @@
 // budget holds however many people are watching; writes (schedule, seat, upload, send, rpc) pass straight through.
 import { RELAY_BASE } from './_relay.js'
 export const config = { runtime: 'edge' }
-const TTL = { codes: 4, board: 8, vamp: 3, coin: 8 }
-const POSTS = new Set(['arm', 'upload', 'send', 'rpc', 'launched'])
+const TTL = { launches: 4, board: 8, vamp: 3, coin: 8 }
+const POSTS = new Set(['submit', 'seat', 'upload', 'send', 'rpc', 'launched'])
 const J = { 'content-type': 'application/json' }
 export default async function handler(req) {
   const u = new URL(req.url), path = u.searchParams.get('path')

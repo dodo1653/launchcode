@@ -172,3 +172,7 @@ a { color: inherit; } button { font: inherit; cursor: pointer; }
 .rfeed .htag { flex: none; font: 600 10.5px 'JetBrains Mono'; letter-spacing: .08em; text-transform: uppercase; color: #ffb547; border: 1px solid rgba(255,181,71,.35); padding: 2px 7px; border-radius: 6px; }
 .rfeed #rHead { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 960px) { .rg { grid-template-columns: repeat(2, 1fr); } .rg > div { border-bottom: 1px solid #221a19; } }
+
+/* platform logos on the hero tiles */
+.tile.logo { padding: 0; overflow: visible; background: #0e0b0b; }
+.tile.logo img { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; display: block; }

@@ -1,5 +1,7 @@
-// LAUNCHCODE: the page. Polls the relay's armed and fired launches; arming signs the coin's pump.fun launch on the
-// creator's durable nonce (with a small Jito tip) and hands it to the relay with its trigger.
+// LAUNCHCODE: the page. Creators arm a pre-signed pump.fun launch on their durable nonce for a time; buyers take one
+// of four seats with a buy signed now on theirs. At launch time the relay sends the launch and the seats as one Jito
+// bundle, so they land in the coin's first block, before any sniper can see it.
+import { seatTx, tokensFor, TIPS, LAUNCH_TIP } from './seat.js'
 const $ = (id) => document.getElementById(id)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const Q = new URLSearchParams(location.search)
@@ -9,10 +11,13 @@ const get = (p, q = '') => fetch(RELAY ? `${RELAY}/v1/${p}?${q}` : `/api/r?path=
 const post = (p, b) => fetch(RELAY ? `${RELAY}/v1/${p}` : `/api/r?path=${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json())
 const rpc = async (method, params) => { const r = await post('rpc', { method, params }); if (r.error) throw new Error(r.error); return r.result }
 const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? Math.floor(s) + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h' }
-const left = (t) => { const s = Math.max(0, (t - Date.now()) / 1000); return s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm' }
 let toastT; const toast = (m, bad) => { const t = $('toast'); t.textContent = m; t.className = 'toast on' + (bad ? ' bad' : ''); clearTimeout(toastT); toastT = setTimeout(() => (t.className = 'toast'), 5200) }
 const hhmm = (ms) => { const d = new Date(ms); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') }
+const left = (ms) => { const s = Math.max(0, Math.floor((ms - Date.now()) / 1000)); return s >= 3600 ? `${Math.floor(s / 3600)}h ${String(Math.floor(s / 60) % 60).padStart(2, '0')}m` : `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` }
 const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(Math.round(n))
+// a wallet's colour: two greens from its address
+function av(w) { let h = 0; for (const c of String(w)) h = (h * 31 + c.charCodeAt(0)) >>> 0; const a = 120 + (h % 60), b = 140 + ((h >> 8) % 70); return `background:linear-gradient(135deg,hsl(${a} 70% 52%),hsl(${b} 60% 22%))` }
+
 const ICON = {
   news: '<svg viewBox="0 0 24 24" fill="none" stroke="#ffb547" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h6M7 13h10M7 16h7"/></svg>',
   wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="#ffb547" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12h2M3 9h18"/></svg>',
@@ -24,51 +29,57 @@ const ICON = {
 
 // ---------------------------------------------------------------- the board
 let st = null, sol = 0
-const mcf = (mc) => (sol ? '$' + fmt(mc * sol) : fmt(mc) + ' SOL')
+const mcf = (mc) => { const v = sol ? mc * sol : mc; return (sol ? '$' : '') + fmt(v) + (sol ? '' : ' SOL') }
 async function pull() {
-  try { const r = await get('codes'); if (!r || !r.armed) throw new Error('relay'); st = r; sol = st.sol || sol; paint() } catch {
+  try { const r = await get('launches'); if (!r || !r.boarding) throw new Error('relay'); st = r; sol = st.sol || sol; paint() } catch {
     $('liveDot').className = 'off'; $('liveTxt').textContent = 'reconnecting'
     if (!st) { const m = '<div class="empty">Connecting to the relay…</div>'; $('armedList').innerHTML = m; $('firedList').innerHTML = m }
   }
 }
-function reasonText(f) {
-  const r = f.reason || {}
-  if (r.headline) return `“${r.headline}” · ${r.src}`
-  if (r.price) return `SOL hit $${(+r.price).toFixed(2)}`
-  if (r.tx) return `wallet moved · ${String(r.tx).slice(0, 10)}…`
-  if (r.graduated) return 'it graduated'
-  if (r.mc) return `market cap $${fmt(r.mc)}`
-  if (r.time) return 'its time came'
-  return ''
+function seatsHtml(L) {
+  const out = []
+  for (let i = 0; i < 4; i++) {
+    const s = L.seats[i]
+    out.push(s ? `<div class="st"><span class="av" style="${av(s.wallet)}"></span><b>${s.sol} SOL</b><span>${esc(s.wallet)}</span></div>` : `<div class="st open"><span class="av"></span><b>open</b><span>seat ${i + 1}</span></div>`)
+  }
+  return out.join('')
 }
 function paint() {
-  $('liveDot').className = st.live ? '' : 'off'; $('liveTxt').textContent = st.live ? 'watching' : 'reconnecting'
+  $('liveDot').className = st.live ? '' : 'off'; $('liveTxt').textContent = st.live ? 'watching pump.fun' : 'reconnecting'
   paintRelay()
-  $('armedMeta').textContent = st.armed.length ? `${st.armed.length} armed` : ''
-  $('armedList').innerHTML = st.armed.length ? st.armed.map((c) => `<div class="card"><div class="hd"><span class="seal">${ICON.seal}</span>
-      <div><div class="trg">${esc(c.trigger)}<small>sealed · dev ${esc(c.dev)}${c.buy ? ' · buys ' + c.buy + ' SOL' : ''}</small></div></div>
-      <div class="when"><b>${ago(c.armedAt)}</b><span>armed · ${left(c.expires)} left</span></div></div></div>`).join('')
-    : '<div class="empty">Nothing armed right now. Arm the first launch.</div>'
-  $('firedList').innerHTML = st.fired.length ? st.fired.map((f) => f.expired
-    ? `<div class="rw"><span class="t">${hhmm(f.detected)}</span><span class="ph"></span><div><span class="nm">expired unfired</span><div class="ds">${esc(f.trigger)} · dev ${esc(f.dev)}</div></div><div class="why"></div><span></span><span></span></div>`
-    : `<a class="rw" href="${f.failed ? '#' : 'https://pump.fun/coin/' + esc(f.mint)}" target="_blank" rel="noopener"><span class="t">${hhmm(f.detected)}</span>${f.image ? `<img src="${esc(f.image)}" alt="">` : '<span class="ph"></span>'}
-      <div><span class="tk">$${esc(f.symbol)}</span> <span class="nm">${esc(f.name)}</span><div class="ds">${esc(f.trigger)}</div></div>
-      <div class="why">${esc(reasonText(f))}</div><span class="mono ${f.failed ? 'red' : 'up'}">${f.failed ? esc(f.failed) : f.ms != null ? (f.ms / 1000).toFixed(1) + 's to land' : ''}</span><span class="mono dim hm">${f.live ? mcf(f.live.mc) : ''}</span></a>`).join('')
-    : '<div class="empty">Nothing has fired yet. The first one shows here with what tripped it.</div>'
+  const B = st.boarding
+  $('armedMeta').textContent = B.length ? `${B.length} boarding · ${B.reduce((a, L) => a + 4 - L.seats.length, 0)} open seats` : ''
+  $('armedList').innerHTML = B.length ? B.map((L) => `<div class="card" data-id="${esc(L.id)}">
+      <div class="hd">${L.image ? `<img src="${esc(L.image)}" alt="" loading="lazy">` : '<span class="ph"></span>'}<div><div class="tk">$${esc(L.symbol)}</div><div class="nm">${esc(L.name)}</div></div>
+      <div class="when"><b class="cd" data-at="${L.at}">${left(L.at)}</b><span>${L.full ? 'or when full' : 'launches ' + hhmm(L.at)}</span></div></div>
+      ${L.desc ? `<div class="ds">${esc(L.desc)}</div>` : ''}
+      <div class="seats">${seatsHtml(L)}</div>
+      <div class="ft"><span>dev ${esc(L.dev)}${L.buy ? ` · ${L.buy} SOL` : ''}</span><span>ahead of next seat: ${L.ahead.toFixed(2)} SOL</span></div>
+      ${L.seats.length < 4 ? `<button class="go seatb" data-id="${esc(L.id)}">Take seat ${L.seats.length + 1} of 4</button>` : '<button class="go" disabled>Seats full · launching</button>'}
+    </div>`).join('')
+    : '<div class="empty">Nothing armed right now. Arm a launch and its four seats open here.</div>'
+  $('armedList').querySelectorAll('.seatb').forEach((b) => (b.onclick = () => openSeat(b.dataset.id)))
+  $('firedList').innerHTML = st.launched.length ? st.launched.map((r) => {
+    const tags = r.failed ? `<i class="drop">${esc(r.failed)}</i>` : [`<i>launch · block 0</i>`, ...(r.seats || []).map((s) => s.dropped ? `<i class="drop">${esc(s.wallet)} dropped</i>` : s.block0 ? `<i>${esc(s.wallet)} · block 0</i>` : `<i class="late">${esc(s.wallet)} · ${s.slot && r.slot ? '+' + (s.slot - r.slot) + ' slot' : 'sent after'}</i>`)].join('')
+    return `<a class="rw" href="${r.failed ? '#' : 'https://pump.fun/coin/' + esc(r.mint)}" target="_blank" rel="noopener"><span class="t">${hhmm(r.at)}</span>${r.image ? `<img src="${esc(r.image)}" alt="">` : '<span class="ph"></span>'}
+      <div><span class="tk">$${esc(r.symbol)}</span> <span class="nm">${esc(r.name)}</span><div class="ds">${r.failed ? 'did not launch' : r.bundled ? 'one bundle: launch + ' + (r.seats || []).filter((s) => s.block0).length + ' seats' : 'launched alone, seats right after'}</div></div>
+      <div class="blk blkc">${tags}</div><span class="mono up">${r.live ? mcf(r.live.mc) : '—'}</span><span class="mono dim hm">${r.live ? (r.live.done ? 'graduated' : 'curve ' + r.live.prog + '%') : ''}</span></a>`
+  }).join('') : '<div class="empty">No launches yet. The first one lands here with every seat\'s block.</div>'
 }
-pull(); setInterval(pull, 5000)
+setInterval(() => { document.querySelectorAll('.cd').forEach((e) => { const at = +e.dataset.at; e.textContent = left(at); e.classList.toggle('soon', at - Date.now() < 60_000) }) }, 500)
+pull(); setInterval(pull, 6000)
 
-// ---------------------------------------------------------------- wallet and nonce
+// ---------------------------------------------------------------- wallet, nonce accounts
 const W3 = () => import('https://esm.sh/@solana/web3.js@1.98.0?bundle')
 const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s) }
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
-const TIPS = ['ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49', 'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh', 'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL', 'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt', 'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY', '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5', '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT', 'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe']
 let wallet = null
 async function connectWallet() {
   if (wallet) return wallet
   const p = window.phantom?.solana || window.solflare || window.backpack
   if (!p) throw new Error('no Solana wallet found. Install Phantom, Solflare or Backpack.')
-  const r = await p.connect(); wallet = { p, pk: (r?.publicKey || p.publicKey).toString() }; return wallet
+  const r = await p.connect(); wallet = { p, pk: (r?.publicKey || p.publicKey).toString() }
+  return wallet
 }
 async function confirm(sig) {
   for (let i = 0; i < 40; i++) {
@@ -79,8 +90,10 @@ async function confirm(sig) {
   }
   throw new Error('not confirmed in time, try again')
 }
+// a nonce account at an address made from the wallet and a seed: created once, reused every time
 async function ensureNonce(W, seed, note) {
-  const owner = new W.PublicKey(wallet.pk), noncePk = await W.PublicKey.createWithSeed(owner, seed, W.SystemProgram.programId)
+  const owner = new W.PublicKey(wallet.pk)
+  const noncePk = await W.PublicKey.createWithSeed(owner, seed, W.SystemProgram.programId)
   let acc = await rpc('getAccountInfo', [noncePk.toBase58(), { encoding: 'base64', commitment: 'confirmed' }])
   if (!acc?.value) {
     note('sign once to create your nonce account (about 0.0015 SOL of rent, yours to reclaim)…')
@@ -95,20 +108,56 @@ async function ensureNonce(W, seed, note) {
   return { noncePk, nonce: W.NonceAccount.fromAccountData(unb64(acc.value.data[0])).nonce }
 }
 const mark = (id, s, t) => { const i = $(id); i.className = s; i.textContent = s === 'ok' ? '✓' : s === 'no' ? '✕' : '○'; if (t) $(id + 't').textContent = t }
+document.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => b.closest('.sheet').classList.remove('on')))
+addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('on')) })
 
-// ---------------------------------------------------------------- arming
-const sheet = $('sheet')
-;[$('bArm'), $('bArm2')].forEach((b) => (b.onclick = () => sheet.classList.add('on')))
-document.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => sheet.classList.remove('on')))
-addEventListener('keydown', (e) => { if (e.key === 'Escape') sheet.classList.remove('on') })
-let kind = 'news'
-$('kinds').querySelectorAll('button').forEach((b) => (b.onclick = () => { kind = b.dataset.k; $('kinds').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); document.querySelectorAll('.tf').forEach((f) => (f.hidden = f.dataset.k !== kind)) }))
-function trigger() {
-  if (kind === 'news') return { kind, words: $('tWords').value }
-  if (kind === 'wallet') return { kind, address: $('tWallet').value.trim() }
-  if (kind === 'price') return { kind, dir: $('tDir').value, level: +$('tLevel').value }
-  if (kind === 'pump') return { kind, mint: $('tMint').value.trim(), event: $('tEvent').value, level: +$('tMc').value }
-  return { kind, at: new Date($('tAt').value).getTime() }
+// ---------------------------------------------------------------- taking a seat
+let seatId = null
+function openSeat(id) {
+  const L = st?.boarding.find((x) => x.id === id); if (!L) return
+  seatId = id
+  $('sTitle').textContent = `Seat ${L.seats.length + 1} of 4`
+  $('sCoin').innerHTML = `${L.image ? `<img src="${esc(L.image)}" alt="">` : ''}<div><b>$${esc(L.symbol)}</b><div class="dim small">${esc(L.name)} · launches ${L.full ? 'at ' + hhmm(L.at) + ' or when full' : 'at ' + hhmm(L.at)}</div></div>`
+  quote(); $('sheetS').classList.add('on')
+}
+function quote() {
+  const L = st?.boarding.find((x) => x.id === seatId); if (!L) return
+  const amt = Math.min(1, Math.max(0.05, +$('sAmt').value || 0))
+  const tok = Number(tokensFor(amt * 1e9, L.ahead * 1e9)) / 1e6, pct = (tok / 1e9) * 100
+  $('sQuote').innerHTML = `${L.ahead.toFixed(2)} SOL goes in ahead of you (the dev and earlier seats). <b>${amt} SOL</b> gets about <b>${fmt(tok)}</b> $${esc(L.symbol)} (${pct.toFixed(2)}% of supply), at the coin's first-block price. You accept no less than 85% of that.`
+}
+$('sAmt').oninput = quote
+$('sAmts').querySelectorAll('button').forEach((b) => (b.onclick = () => { $('sAmt').value = b.dataset.v; quote() }))
+$('sGo').onclick = async () => {
+  const b = $('sGo'), note = (t) => ($('sNote').textContent = t)
+  if (!wallet) { try { await connectWallet(); mark('qW', 'ok', `wallet ${wallet.pk.slice(0, 4)}…${wallet.pk.slice(-4)}`); b.textContent = 'Sign my seat' } catch (e) { toast(String(e.message || e), true) } return }
+  const L = st?.boarding.find((x) => x.id === seatId); if (!L) return toast('that launch is gone', true)
+  const amt = +$('sAmt').value
+  if (!(amt >= 0.05 && amt <= 1)) return toast('a seat is 0.05 to 1 SOL', true)
+  b.disabled = true
+  try {
+    const W = await W3()
+    const { noncePk, nonce } = await ensureNonce(W, 'launchcode-seat', note)
+    mark('qN', 'ok', `seat nonce ${noncePk.toBase58().slice(0, 4)}…${noncePk.toBase58().slice(-4)}`)
+    const fresh = (await get('launches')).boarding.find((x) => x.id === seatId) || L
+    const { tx } = seatTx(W, { mint: fresh.mint, user: wallet.pk, spend: Math.round(amt * 1e9), ahead: Math.round(fresh.ahead * 1e9), noncePubkey: noncePk.toBase58(), nonce })
+    note('sign your seat. it is only sent at launch, inside the launch bundle')
+    const signed = await wallet.p.signTransaction(tx)
+    mark('qS', 'ok', 'seat signed')
+    const r = await post('seat', { id: seatId, tx: b64(signed.serialize()) })
+    if (r.error) throw new Error(r.error)
+    toast(`You're in seat ${r.seats.length} of $${r.symbol}. It lands in block zero at ${hhmm(r.at)}.`); $('sheetS').classList.remove('on'); pull()
+  } catch (e) { toast(String(e.message || e).slice(0, 220), true) }
+  note('Your buy is only sent at launch, inside the launch bundle.'); b.disabled = false
+}
+
+// ---------------------------------------------------------------- scheduling a launch
+const sheetL = $('sheet')
+;[$('bArm'), $('bArm2')].forEach((b) => (b.onclick = () => { fillTimes(); sheetL.classList.add('on') }))
+function fillTimes() {
+  const q = 15 * 60_000, first = Math.ceil((Date.now() + 3 * 60_000) / q) * q, opts = []
+  for (let t = first; t <= Date.now() + 24 * 3600_000; t += q) { const m = Math.round((t - Date.now()) / 60_000); if (opts.length < 12 || new Date(t).getMinutes() === 0) opts.push(`<option value="${t}">${hhmm(t)} · in ${m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ' min'}</option>`) }
+  $('fAt').innerHTML = opts.join(''); if ($('fAt').options.length > 2) $('fAt').selectedIndex = 2
 }
 let img = null, imgHash = ''
 $('fImg').onchange = async (e) => {
@@ -121,10 +170,10 @@ $('fImg').onchange = async (e) => {
 }
 $('fGo').onclick = async () => {
   const b = $('fGo'), note = (t) => ($('fNote').textContent = t)
-  if (!wallet) { try { await connectWallet(); mark('kW', 'ok', `dev wallet ${wallet.pk.slice(0, 4)}…${wallet.pk.slice(-4)}`); b.textContent = 'Sign and arm' } catch (e) { toast(String(e.message || e), true) } return }
-  const name = $('fName').value.trim(), symbol = $('fSym').value.trim().replace(/^\$+/, '')
+  if (!wallet) { try { await connectWallet(); mark('kW', 'ok', `dev wallet ${wallet.pk.slice(0, 4)}…${wallet.pk.slice(-4)}`); b.textContent = 'Sign and schedule' } catch (e) { toast(String(e.message || e), true) } return }
+  const name = $('fName').value.trim(), symbol = $('fSym').value.trim().replace(/^\$+/, ''), at = +$('fAt').value
   if (!name || !symbol || !img) return toast('name, ticker and a picture, please', true)
-  const trig = trigger()
+  if (!(at > Date.now() + 60_000)) { fillTimes(); return toast('pick a launch time', true) }
   b.disabled = true
   try {
     const W = await W3(), owner = new W.PublicKey(wallet.pk)
@@ -148,17 +197,17 @@ $('fGo').onclick = async () => {
     }))
     const msg = W.TransactionMessage.decompile(built.message, { addressLookupTableAccounts: luts })
     msg.instructions.unshift(W.SystemProgram.nonceAdvance({ noncePubkey: noncePk, authorizedPubkey: owner }))
-    msg.instructions.push(W.SystemProgram.transfer({ fromPubkey: owner, toPubkey: new W.PublicKey(TIPS[mint.publicKey.toBytes()[0] % 8]), lamports: 500_000 }))
+    msg.instructions.push(W.SystemProgram.transfer({ fromPubkey: owner, toPubkey: new W.PublicKey(TIPS[mint.publicKey.toBytes()[0] % 8]), lamports: LAUNCH_TIP }))   // pays for the bundle
     msg.recentBlockhash = nonce
-    const tx = new W.VersionedTransaction(msg.compileToV0Message(luts)); tx.sign([mint])
-    note('sign your launch. it is only sent when the trigger hits')
+    const tx = new W.VersionedTransaction(msg.compileToV0Message(luts))
+    tx.sign([mint])
+    note('sign your launch. it is only sent at launch time')
     const signed = await wallet.p.signTransaction(tx)
     mark('kS', 'ok', 'launch signed')
     note('checking it would land…')
-    const a = await post('arm', { tx: b64(signed.serialize()), mint: mint.publicKey.toBase58(), name, symbol, desc: $('fDesc').value, image: up.image, uri: up.uri, buy, trigger: trig, hours: +$('fHours').value })
-    if (a.error) throw new Error(a.error)
-    try { localStorage.setItem('lc.mine.' + a.id, JSON.stringify({ name, symbol, mint: a.mint })) } catch {}
-    toast(`$${symbol} is armed. It fires when: ${a.trigger}.`); sheet.classList.remove('on'); pull()
+    const sub = await post('submit', { tx: b64(signed.serialize()), mint: mint.publicKey.toBase58(), name, symbol, desc: $('fDesc').value, image: up.image, uri: up.uri, buy, at, full: $('fFull').checked })
+    if (sub.error) throw new Error(sub.error)
+    toast(`$${symbol} is armed for ${hhmm(at)}. Four seats are open. Share the page.`); sheetL.classList.remove('on'); pull()
   } catch (e) { toast(String(e.message || e).slice(0, 220), true) }
   note('Two signatures the first time (the nonce account, then the launch), one after that.'); b.disabled = false
 }
@@ -171,10 +220,12 @@ function paintRelay() {
   document.querySelector('.rh .pulse').className = 'pulse' + (ok ? '' : ' off')
   $('rState').textContent = ok ? 'live on Solana mainnet, reading every pump.fun launch' : 'reconnecting to Solana…'
   $('rLaunch').textContent = fmtN(ch.launches1h || 0)
-  $('rNews').textContent = (st.feeds || []).length; $('rArmed').textContent = st.armed.length
+  $('rNews').textContent = st.hour ? fmtN(st.hour.sniped) : '–'
+  $('rArmed').textContent = st.boarding.length; $('rSeats').textContent = `${st.boarding.reduce((a, L) => a + L.seats.length, 0)} seats taken`
   $('rSol').textContent = sol ? '$' + sol.toFixed(2) : '–'
-  const n = (st.news || [])[0]
-  if (n) { $('rHead').textContent = `“${n.title}” · ${n.src}`; $('rFeed').href = n.link || '#' }
+  const CRUDE = /(n[i1]gg|f[a@]gg?ot|retard|rape|hitler|nazi|kike|chink|tranny|porn|cum|fuck|shit|cock|dick|pussy|cunt|boob|tits|sex|anal|penis|whore|slut)/i
+  const nw = ch.newest && !CRUDE.test(ch.newest.symbol + ' ' + ch.newest.name) ? ch.newest : null
+  if (nw) { $('rHead').textContent = `$${nw.symbol} · ${nw.name}${nw.snipe ? ` · ${nw.snipe} bot buy${nw.snipe > 1 ? 's' : ''} in its first second` : ''}`; $('rFeed').href = 'https://pump.fun/coin/' + nw.mint }
 }
 setInterval(() => {
   if (!st?.chain) return
@@ -183,18 +234,18 @@ setInterval(() => {
   const est = ch.slot ? ch.slot + Math.floor((Date.now() - ch.slotAt) / 400) : 0
   if (est && est !== shownSlot) { const b = $('rSlot'); b.textContent = fmtN(est); b.classList.add('tick'); setTimeout(() => b.classList.remove('tick'), 180); shownSlot = est }
   $('rSlotAgo').textContent = ch.slotAt ? `last block seen ${ago(ch.slotAt)} ago` : ''
-  $('rNewest').textContent = ch.newest ? `newest $${ch.newest.symbol} · ${ago(ch.newest.at)} ago` : ''
-  $('rNewsAgo').textContent = st.newsAt ? `checked ${ago(st.newsAt)} ago · ${fmtN(st.read || 0)} read` : ''
+  $('rNewest').textContent = ch.newest ? `newest launch ${ago(ch.newest.at)} ago` : ''
+  $('rNewsAgo').textContent = st.hour ? `${fmtN(st.hour.snipeSol)} SOL sniped` : ''
   $('rSolAgo').textContent = ch.solAt ? `updated ${ago(ch.solAt)} ago` : ''
 }, 200)
 
 // ---------------------------------------------------------------- the hero: triggers on hairlines into the switch; one trips, the launch goes to pump.fun
 const stage = $('stage'), net = $('net'), nctx = net.getContext('2d'), obj = $('obj')
 const SW = 1120, SH = 360, CEN = [560, 175]
-const TRIG = [['news', 330, 70, 'a headline'], ['wallet', 205, 190, 'a wallet moves'], ['price', 360, 300, 'a price'], ['pump', 840, 62, 'a coin graduates'], ['time', 975, 300, 'a time']]
+const TRIG = [['axiom', 330, 70, 'Axiom'], ['gmgn', 205, 190, 'GMGN'], ['fomo', 360, 300, 'Fomo'], ['terminal', 840, 62, 'Terminal'], ['seat', 975, 300, 'your seats']]
 const PUMP = [930, 182]
-const tiles = TRIG.map(([k, x, y, lab]) => { const el = document.createElement('div'); el.className = 'tile'; Object.assign(el.style, { left: x + 'px', top: y + 'px' }); el.innerHTML = ICON[k] + `<span class="lab">${lab}</span>`; stage.appendChild(el); return el })
-const pumpTile = document.createElement('div'); pumpTile.className = 'tile pump'; Object.assign(pumpTile.style, { left: PUMP[0] + 'px', top: PUMP[1] + 'px' }); pumpTile.innerHTML = '<i></i><span class="lab">pump.fun</span>'; stage.appendChild(pumpTile)
+const tiles = TRIG.map(([k, x, y, lab]) => { const el = document.createElement('div'); el.className = 'tile'; Object.assign(el.style, { left: x + 'px', top: y + 'px' }); el.innerHTML = (k === 'seat' ? ICON.wallet : `<img src="assets/platforms/${k}.png" alt="${lab}">`) + `<span class="lab">${lab}</span>`; if (k !== 'seat') el.classList.add('logo'); stage.appendChild(el); return el })
+const pumpTile = document.createElement('div'); pumpTile.className = 'tile pump'; Object.assign(pumpTile.style, { left: PUMP[0] + 'px', top: PUMP[1] + 'px' }); pumpTile.innerHTML = '<img src="assets/platforms/pumpfun.png" alt="pump.fun"><span class="lab">pump.fun · block 0</span>'; pumpTile.classList.add('logo'); stage.appendChild(pumpTile)
 function fitStage() {
   const s = Math.min(1, (innerWidth - 16) / SW); stage.style.transform = `scale(${s})`; stage.style.marginBottom = `${-(1 - s) * SH}px`
   const d = devicePixelRatio || 1; net.width = SW * d; net.height = SH * d; nctx.setTransform(d, 0, 0, d, 0, 0)
