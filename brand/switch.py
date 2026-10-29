@@ -80,7 +80,7 @@ md = cover.modifiers.new("shell", "SOLIDIFY"); md.thickness = 0.03; md.offset = 
 # hollow it: delete the bottom face by booleaning a slightly smaller box
 inner = rbox("inner", (0.74, 0.99, 0.34), (0, 0, -0.04), red, 0.06, 4)
 bo = cover.modifiers.new("hollow", "BOOLEAN"); bo.object = inner; bo.operation = "DIFFERENCE"; inner.hide_render = True; inner.hide_viewport = True
-bpy.ops.object.empty_add(location=(0, 0.58, 0.24)); hinge = bpy.context.active_object
+bpy.ops.object.empty_add(location=(0, 0.58, 0.24)); hinge = bpy.context.active_object; hinge.name = "hinge"
 cover.parent = hinge; cover.location = (0, -0.52, 0.05)
 hinge.rotation_euler = (math.radians(-104), 0, 0)
 parts.append(cover)
@@ -88,7 +88,7 @@ parts.append(cyl("hingePin", 0.035, 0.9, (0, 0.58, 0.24), chrome, rot=(0, math.r
 # the LED and its bezel, engraved ARM / SAFE marks
 bpy.ops.object.light_add(type="POINT", location=(0.7, -0.55, 0.25)); gl_ = bpy.context.active_object; gl_.data.energy = 6; gl_.data.color = (1, 0.1, 0.05); gl_.data.shadow_soft_size = 0.05; parts.append(gl_)
 parts.append(cyl("ledBezel", 0.11, 0.06, (0.7, -0.55, 0.03), chrome))
-bpy.ops.mesh.primitive_uv_sphere_add(radius=0.08, location=(0.7, -0.55, 0.06)); l = bpy.context.active_object; l.scale = (1, 1, 0.6); l.data.materials.append(led); bpy.ops.object.shade_smooth(); parts.append(l)
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.08, location=(0.7, -0.55, 0.06)); l = bpy.context.active_object; l.name = "ledDome"; l.scale = (1, 1, 0.6); l.data.materials.append(led); bpy.ops.object.shade_smooth(); parts.append(l)
 for (txt, loc, size, m) in [("ARM", (-0.62, -0.62, 0.002), 0.17, paint), ("LAUNCH", (0, -0.9, 0.002), 0.13, paint)]:
     bpy.ops.object.text_add(location=loc); t = bpy.context.active_object; t.data.body = txt; t.data.size = size; t.data.align_x = "CENTER"; t.data.extrude = 0.004
     t.data.materials.append(m); parts.append(t)
@@ -151,6 +151,16 @@ try:
 except Exception as e: print("no glare", e)
 
 sc.render.resolution_x = sc.render.resolution_y = RES
+if MODE == "glb":
+    # the model for the film: text to meshes, the cutter gone, the pivot reset (the film places it)
+    for o in list(bpy.data.objects):
+        if o.type == "FONT":
+            bpy.ops.object.select_all(action="DESELECT"); o.select_set(True); bpy.context.view_layer.objects.active = o; bpy.ops.object.convert(target="MESH")
+        if o.name.startswith("inner") or o.type in ("LIGHT", "CAMERA"): bpy.data.objects.remove(o) if o.name.startswith("inner") else None
+    hinge.rotation_euler = (0, 0, 0); piv.rotation_euler = (0, 0, 0)
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_apply=True, export_lights=False, export_cameras=False, use_selection=False)
+    print("exported", OUT); raise SystemExit
 if MODE == "still":
     backdrop(); sc.render.filepath = OUT; bpy.ops.render.render(write_still=True)
 elif MODE == "cutout":

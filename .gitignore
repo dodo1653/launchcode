@@ -16,3 +16,6 @@ promo/out/
 promo/frames120/
 promo/frames120.log
 brand/launchcode_raw.png
+promo3d/frames120/
+promo3d/frames120.log
+promo3d/*.wav
