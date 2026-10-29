@@ -1,0 +1,127 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>LAUNCHCODE film</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #060505; } canvas { position: absolute; inset: 0; }</style>
+</head><body><canvas id="c" width="1920" height="1080"></canvas>
+<script>window.READY = false; window.DURATION = 10</script>
+<script type="module">
+// LAUNCHCODE, 10 s. Every frame drawn by renderFrame(t). The tickers racing in the opening are real pump.fun launches
+// (captured from the relay feed); the switch is the Blender render (brand/switch.py, turn mode). No headline is invented:
+// the trigger shown is one a user would type.
+const c = document.getElementById('c'), g = c.getContext('2d'), W = 1920, H = 1080
+const RED = '#ff3b2f', AMB = '#ffb547', INK = '#f2eeec', GREY = '#5e5552', DIM = '#8a8380'
+const seg = (t, a, b) => Math.max(0, Math.min(1, (t - a) / (b - a)))
+const eo = (x) => 1 - Math.pow(1 - x, 3), back = (x) => { const s = 1.6; x = Math.max(0, Math.min(1, x)); return 1 + (s + 1) * Math.pow(x - 1, 3) + s * Math.pow(x - 1, 2) }
+let seed = 5; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+const FR = await Promise.all(Array.from({ length: 60 }, (_, i) => new Promise((ok) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = `turn/s${String(i).padStart(3, '0')}.png` })))
+const TICK = await fetch('tickers.json').then((r) => r.json()).then((d) => d.tickers).catch(() => [])
+await Promise.all(['900 96px Archivo', '600 30px Archivo', '700 26px "JetBrains Mono"'].map((f) => document.fonts.load(f)))
+const ground = document.createElement('canvas'); ground.width = W; ground.height = H
+{ const q = ground.getContext('2d'); q.fillStyle = '#060505'; q.fillRect(0, 0, W, H); q.fillStyle = 'rgba(255,255,255,.06)'; for (let y = 11; y < H; y += 26) for (let x = 11; x < W; x += 26) { q.beginPath(); q.arc(x, y, 1.1, 0, 7); q.fill() } }
+const grain = document.createElement('canvas'); grain.width = W / 2; grain.height = H / 2
+{ const q = grain.getContext('2d'), d = q.createImageData(W / 2, H / 2); for (let i = 0; i < d.data.length; i += 4) { const v = rnd() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 13 } q.putImageData(d, 0, 0) }
+const bloom = (x, y, r, a, col = '255,59,47') => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(1, `rgba(${col},0)`); g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2) }
+const rr = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r) }
+function words(text, x, y, size, color, t0, t, { align = 'center', gap = 0.07, dur = 0.38, out = 99, wght = 900, wdth = 112 } = {}) {
+  g.font = `${wght} ${size}px Archivo`; g.fontStretch = wdth >= 112 ? 'semi-expanded' : 'normal'
+  const ws = text.split(' '), sp = g.measureText(' ').width, wid = ws.map((w) => g.measureText(w).width)
+  const total = wid.reduce((a, b) => a + b, 0) + sp * (ws.length - 1); let cx = align === 'center' ? x - total / 2 : x
+  const fo = seg(t, out, out + 0.25)
+  ws.forEach((w, i) => {
+    const p = seg(t, t0 + i * gap, t0 + i * gap + dur); if (p <= 0) { cx += wid[i] + sp; return }
+    g.save(); g.globalAlpha = eo(p) * (1 - fo); g.filter = `blur(${(1 - eo(p)) * 14 + fo * 10}px)`; g.fillStyle = color; g.fillText(w, cx, y + (1 - eo(p)) * 18); g.restore(); cx += wid[i] + sp
+  })
+}
+function chip(x, y, w, h, icon, title, small, { hot = 0, alpha = 1 } = {}) {
+  g.save(); g.globalAlpha = alpha
+  if (hot) { g.shadowColor = 'rgba(255,181,71,.7)'; g.shadowBlur = 30 * hot }
+  g.fillStyle = '#120e0e'; rr(x, y, w, h, 16); g.fill(); g.shadowBlur = 0
+  g.strokeStyle = hot ? `rgba(255,181,71,${0.4 + 0.5 * hot})` : 'rgba(255,255,255,.1)'; g.lineWidth = 2; rr(x, y, w, h, 16); g.stroke()
+  g.fillStyle = '#1b1312'; rr(x + 14, y + 14, h - 28, h - 28, 12); g.fill(); g.fillStyle = AMB; g.font = '700 26px "JetBrains Mono"'; g.textAlign = 'center'; g.fillText(icon, x + 14 + (h - 28) / 2, y + h / 2 + 9); g.textAlign = 'left'
+  g.fillStyle = INK; g.font = '700 28px Archivo'; g.fillText(title, x + h, y + h / 2 - 4)
+  g.fillStyle = AMB; g.font = '500 19px "JetBrains Mono"'; g.fillText(small, x + h, y + h / 2 + 24)
+  g.restore()
+}
+const sw = (cx, cy, size, f, a = 1) => { const im = FR[Math.max(0, Math.min(59, Math.round(f)))]; if (!im) return; g.save(); g.globalAlpha = a; g.drawImage(im, cx - size / 2, cy - size / 2, size, size); g.restore() }
+
+window.renderFrame = (t) => {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.globalAlpha = 1; g.drawImage(ground, 0, 0)
+  // 1. the race (0 .. 2.6): real launches flying past; you're never first
+  if (t < 2.7) {
+    const out = seg(t, 2.35, 2.65)
+    g.save(); g.globalAlpha = 1 - out
+    for (let r = 0; r < 9; r++) {
+      const y = 120 + r * 100, sp = 900 + r * 140, off = (t * sp + r * 333) % 2600
+      for (let k = 0; k < 6; k++) {
+        const x = W + 300 - ((off + k * 440) % 2600), s = TICK[(r * 7 + k * 3) % Math.max(1, TICK.length)] || 'COIN'
+        g.fillStyle = 'rgba(255,255,255,.035)'; rr(x, y, 300, 64, 12); g.fill()
+        g.fillStyle = 'rgba(242,238,236,.32)'; g.font = '700 26px "JetBrains Mono"'; g.fillText('$' + String(s).slice(0, 10), x + 18, y + 42)
+      }
+    }
+    g.restore()
+    bloom(W / 2, H / 2, 700, 0.25 * (1 - out), '6,5,5')
+    g.fillStyle = `rgba(6,5,5,${0.55 * (1 - out)})`; g.fillRect(0, 360, W, 360)
+    words('Every narrative gets a first coin.', W / 2, 520, 92, INK, 0.15, t, { gap: 0.06, out: 2.35 })
+    words("It's never yours.", W / 2, 640, 92, GREY, 0.95, t, { gap: 0.08, out: 2.35 })
+  }
+  // 2. arm it (2.6 .. 4.2): the cover lifts, the LED comes on
+  if (t >= 2.55 && t < 4.35) {
+    const a = seg(t, 2.55, 2.8) * (1 - seg(t, 4.1, 4.35))
+    bloom(W / 2, 470, 620, 0.25 * a); sw(W / 2, 450, 760, 59 * seg(t, 2.6, 3.9), a)
+    words('Arm it before it breaks.', W / 2, 960, 84, INK, 2.75, t, { out: 4.1 })
+  }
+  // 3. the trigger (4.2 .. 7.6): pick one, sealed, it trips, it's live
+  if (t >= 4.2 && t < 7.7) {
+    const a = seg(t, 4.2, 4.45) * (1 - seg(t, 7.45, 7.7))
+    g.save(); g.globalAlpha = a
+    const items = [['¶', 'words in a headline', 'you type them'], ['◎', 'a wallet moves', 'any address'], ['↗', 'SOL crosses a price', 'any level'], ['★', 'a coin graduates', 'or hits a market cap'], ['◷', 'a time', 'any minute']]
+    items.forEach(([ic, ti, sm], i) => {
+      const t0 = 4.3 + i * 0.12, p = back(seg(t, t0, t0 + 0.35)); if (p <= 0) return
+      const hot = i === 0 ? seg(t, 5.0, 5.3) : 0
+      g.save(); g.translate(-(1 - p) * 120, 0); chip(150, 200 + i * 120, 560, 98, ic, ti, sm, { hot, alpha: seg(t, t0, t0 + 0.12) * (i === 0 || t < 5.0 ? 1 : 0.4) }); g.restore()
+    })
+    // the sealed coin, then the flash, then live
+    const sp = back(seg(t, 5.3, 5.7))
+    if (sp > 0) {
+      const live = seg(t, 6.45, 6.7), x = 900, y = 380
+      g.save(); g.translate(x + 420, y + 150); g.scale(sp, sp); g.translate(-(x + 420), -(y + 150))
+      g.shadowColor = live ? 'rgba(74,222,128,.6)' : 'rgba(255,59,47,.5)'; g.shadowBlur = 40
+      g.fillStyle = '#120e0e'; rr(x, y, 840, 300, 24); g.fill(); g.shadowBlur = 0
+      g.strokeStyle = live ? `rgba(74,222,128,${0.5 + 0.5 * live})` : 'rgba(255,59,47,.7)'; g.lineWidth = 3; rr(x, y, 840, 300, 24); g.stroke()
+      g.fillStyle = live ? '#13241a' : '#1c1312'; rr(x + 30, y + 30, 120, 120, 20); g.fill()
+      if (live) { g.strokeStyle = '#4ade80'; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + 62, y + 92); g.lineTo(x + 82, y + 112); g.lineTo(x + 120, y + 66); g.stroke() }
+      else { g.strokeStyle = RED; g.lineWidth = 7; g.beginPath(); g.arc(x + 90, y + 78, 18, Math.PI, 0); g.stroke(); g.fillStyle = RED; rr(x + 62, y + 78, 56, 44, 7); g.fill() }
+      g.fillStyle = INK; g.font = '900 64px Archivo'; g.fillText(live ? 'LIVE ON PUMP.FUN' : '$????', x + 180, y + 102)
+      g.fillStyle = live ? '#4ade80' : DIM; g.font = '600 26px "JetBrains Mono"'; g.fillText(live ? 'fired the second it hit' : 'sealed until it fires', x + 182, y + 145)
+      g.fillStyle = AMB; g.font = '600 24px "JetBrains Mono"'; g.fillText('trigger: a headline with “your words”', x + 30, y + 220)
+      g.fillStyle = 'rgba(255,255,255,.08)'; rr(x + 30, y + 245, 780, 10, 5); g.fill(); g.fillStyle = live ? '#4ade80' : RED; rr(x + 30, y + 245, 780 * Math.min(1, seg(t, 5.6, 6.45) + live), 10, 5); g.fill()
+      g.restore()
+    }
+    // the trip: a red flash across
+    const fl = seg(t, 6.35, 6.45) * (1 - seg(t, 6.45, 6.9)); if (fl > 0) { g.fillStyle = `rgba(255,59,47,${0.35 * fl})`; g.fillRect(0, 0, W, H) }
+    g.restore()
+    words('Pick a trigger.', 150, 140, 70, INK, 4.25, t, { align: 'left', out: 5.25 })
+    words('Sealed until it fires.', 150, 140, 70, INK, 5.35, t, { align: 'left', out: 6.35 })
+    words('Live the second it hits.', 150, 140, 70, '#4ade80', 6.5, t, { align: 'left', out: 7.45 })
+  }
+  // 4. the rules (7.6 .. 8.7)
+  if (t >= 7.6 && t < 8.75) {
+    const out = seg(t, 8.5, 8.7)
+    words('No copies.', W / 2, 430, 104, INK, 7.65, t, { out: 8.5 })
+    words('Nobody sees it coming.', W / 2, 570, 104, RED, 7.9, t, { gap: 0.06, out: 8.5 })
+  }
+  // 5. the end card
+  if (t >= 8.6) {
+    const a = seg(t, 8.6, 8.9)
+    bloom(W / 2, 360, 560, 0.25 * a); sw(W / 2, 360, 560, 59, a)
+    words('LAUNCHCODE', W / 2, 790, 140, INK, 8.75, t, { gap: 0, wdth: 125 })
+    words('armed launches for pump.fun', W / 2, 862, 36, '#a8a09d', 9.0, t, { gap: 0.04, wght: 600 })
+    g.fillStyle = RED; words('$LAUNCHCODE', W / 2, 930, 30, RED, 9.25, t, { wght: 700 })
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.filter = 'none'; g.globalAlpha = 1
+  g.drawImage(grain, (Math.floor(t * 30) % 3) * -8, 0, W + 16, H)
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)'); g.fillStyle = vg; g.fillRect(0, 0, W, H)
+  const f = seg(t, 9.72, 10); if (f > 0) { g.fillStyle = `rgba(0,0,0,${f})`; g.fillRect(0, 0, W, H) }
+}
+window.renderFrame(0); window.READY = true
+</script></body></html>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAUNCHCODE · first to every narrative</title>
+<meta name="description" content="LAUNCHCODE is a pump.fun launchpad for armed launches. Sign your launch now, pick a trigger (words in a headline, a wallet moving, a price, a graduation, a time) and it fires the second the trigger hits.">
+<meta property="og:title" content="LAUNCHCODE · first to every narrative">
+<meta property="og:description" content="Arm a pump.fun launch. It fires the second the news breaks.">
+<meta property="og:image" content="assets/og.jpg">
+<link rel="icon" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lc.css">
+</head>
+<body>
+<div class="navwrap"><header class="top">
+  <a class="word" href="#"><img src="assets/icon.png" alt=""><span>LAUNCHCODE</span></a>
+  <nav><a href="#armed">Armed</a><a href="#fired">Fired</a><a href="#how">How it works</a></nav>
+  <span class="live"><i id="liveDot"></i><span id="liveTxt">connecting</span></span>
+  <button class="go" id="bArm">Arm a launch</button>
+</header></div>
+
+<section class="hero">
+  <div class="stage" id="stage">
+    <canvas id="net"></canvas>
+    <img class="obj" id="obj" src="assets/switch.png" alt="">
+    <div class="node out" id="outNode"><span class="pill"><i></i></span><div><b>pump.fun</b><span id="outTxt">fires the second it hits</span></div></div>
+  </div>
+  <div class="eyebrow center">armed launches for pump.fun</div>
+  <h1 class="headline">First to every narrative.<br><span>Armed before it breaks.</span></h1>
+  <p class="sub">Sign your pump.fun launch now and pick a trigger: words in a headline, a wallet moving, a price, a graduation, a time. The second it hits, LAUNCHCODE fires it. The coin stays sealed until then, so nobody can launch it first.</p>
+  <div class="cta"><button class="go big" id="bArm2">Arm a launch</button><a class="ghost" href="#fired">See what fired</a></div>
+  <div class="stat" id="stat"><span class="eyebrow">watching</span><b id="sFeeds">7</b><span>newsrooms</span><i></i><b id="sArmed">–</b><span>armed</span><i></i><span>SOL</span><b id="sSol">–</b></div>
+</section>
+
+<section class="sec" id="armed">
+  <div class="sh"><h2>Armed</h2><span class="mono dim" id="armedMeta"></span></div>
+  <p class="dim note">Every armed launch, sealed. You see the trigger and the dev; the coin's name, ticker and picture show only once it fires.</p>
+  <div class="cards" id="armedList"></div>
+</section>
+
+<section class="sec" id="fired">
+  <div class="sh"><h2>Fired</h2><span class="mono dim">what tripped each one, and how fast it landed</span></div>
+  <div class="rows" id="firedList"></div>
+</section>
+
+<section class="sec how" id="how">
+  <div class="sh"><h2>How it works</h2></div>
+  <div class="steps">
+    <div><b>01</b><h3>Sign it now</h3><p>Name, ticker, picture. Your wallet signs the coin's pump.fun launch against a durable nonce: a small account it owns that keeps a signed transaction valid until it's used.</p></div>
+    <div><b>02</b><h3>Pick a trigger</h3><p>Words in a headline from seven newsrooms (plus Google News for your words), a wallet's next transaction, SOL crossing a price, a pump.fun coin graduating or reaching a market cap, or a time. Armed for up to 72 hours.</p></div>
+    <div><b>03</b><h3>It fires</h3><p>The relay checks every few seconds. When the trigger hits, it sends your signed launch to the network and to Jito at once. You're live while everyone else is still typing the ticker.</p></div>
+  </div>
+  <div class="facts">
+    <p><b>Sealed until it fires.</b> The board shows the trigger and the dev wallet, never the coin. Nobody can read your ticker off the page and launch it first. The relay itself refuses copies of anything launched in the last hour.</p>
+    <p><b>Nothing can change it.</b> The launch is signed by your wallet before it's armed. The relay can only send it as it is; any change breaks your signature. If you're the dev, you're the dev, asleep or not.</p>
+    <p><b>Disarm any time.</b> Advance or close your nonce account from your wallet and the signed launch can never land. Unfired codes expire after the hours you picked.</p>
+    <p><b>What it costs.</b> About 0.0015 SOL of rent for your nonce account (yours to reclaim), pump.fun's normal launch cost when it fires, and a 0.0005 SOL tip to Jito. Nothing goes to LAUNCHCODE.</p>
+    <p class="dim">LAUNCHCODE is independent and not affiliated with pump.fun, Jito or any newsroom it reads. Memecoins are extremely risky. Nothing here is financial advice.</p>
+  </div>
+</section>
+
+<aside class="sheet" id="sheet"><button class="x" data-x>×</button>
+  <div class="eyebrow">arm a launch</div>
+  <h2>Arm it</h2>
+  <p class="dim">Your launch is signed now and waits, sealed, for its trigger.</p>
+  <label>Name</label><input id="fName" maxlength="32">
+  <label>Ticker</label><input id="fSym" maxlength="10">
+  <label>One line about it</label><input id="fDesc" maxlength="280">
+  <label>Picture</label><input id="fImg" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><img id="fPrev" alt="">
+  <div class="two"><div><label>X link</label><input id="fX" placeholder="optional"></div><div><label>Website</label><input id="fWeb" placeholder="optional"></div></div>
+  <label>Trigger</label>
+  <div class="kinds" id="kinds"><button data-k="news" class="on">Headline</button><button data-k="wallet">Wallet</button><button data-k="price">SOL price</button><button data-k="pump">pump.fun coin</button><button data-k="time">Time</button></div>
+  <div class="tf" data-k="news"><input id="tWords" placeholder="words that must all be in the headline, e.g. solana etf"><p class="dim small">Matched against new headlines from CoinDesk, Cointelegraph, Decrypt, The Block, BBC, and Google News for your words.</p></div>
+  <div class="tf" data-k="wallet" hidden><input id="tWallet" placeholder="the wallet address to watch"><p class="dim small">Fires on that wallet's next transaction.</p></div>
+  <div class="tf" data-k="price" hidden><div class="two"><select id="tDir"><option value="above">SOL above</option><option value="below">SOL below</option></select><input id="tLevel" type="number" placeholder="price in $"></div></div>
+  <div class="tf" data-k="pump" hidden><input id="tMint" placeholder="the pump.fun coin's address"><div class="two"><select id="tEvent"><option value="graduates">graduates</option><option value="mc">reaches market cap</option></select><input id="tMc" type="number" placeholder="$ market cap"></div></div>
+  <div class="tf" data-k="time" hidden><input id="tAt" type="datetime-local"></div>
+  <div class="two"><div><label>Armed for</label><select id="fHours"><option value="6">6 hours</option><option value="24" selected>24 hours</option><option value="72">72 hours</option></select></div><div><label>Your first buy (SOL)</label><input id="fBuy" type="number" min="0" step="0.01" placeholder="0"></div></div>
+  <div class="checks">
+    <div class="ck"><i id="kW">○</i><span id="kWt">connect the wallet that will be the coin's dev</span></div>
+    <div class="ck"><i id="kC">○</i><span id="kCt">ticker, name and picture: no copies</span></div>
+    <div class="ck"><i id="kN">○</i><span id="kNt">nonce account: created once, yours</span></div>
+    <div class="ck"><i id="kS">○</i><span id="kSt">sign the launch</span></div>
+  </div>
+  <button class="go big wide" id="fGo">Connect wallet</button>
+  <p class="dim small" id="fNote">Two signatures the first time (the nonce account, then the launch), one after that.</p>
+</aside>
+<div class="toast" id="toast"></div>
+<script type="module" src="lc.js"></script>
+</body></html>
