@@ -176,3 +176,10 @@ a { color: inherit; } button { font: inherit; cursor: pointer; }
 /* platform logos on the hero tiles */
 .tile.logo { padding: 0; overflow: visible; background: #0e0b0b; }
 .tile.logo img { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; display: block; }
+
+/* the contract address */
+.ca { display: flex; align-items: center; gap: 12px; margin: 18px auto 0; padding: 9px 10px 9px 16px; border: 1px solid #2a2120; border-radius: 12px; background: rgba(14,11,11,.85); color: var(--ink); max-width: 100%; cursor: pointer; }
+.ca code { font: 500 14px 'JetBrains Mono'; color: #e2d8d5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca b { font: 700 12px 'JetBrains Mono'; color: #1a0302; background: var(--g); padding: 5px 10px; border-radius: 8px; } .ca:hover { border-color: #6b2d2a; }
+.navca { text-decoration: none; font: 700 13px 'JetBrains Mono'; color: var(--g2); padding: 8px 12px; border: 1px solid #2a2120; border-radius: 10px; } .navca:hover { border-color: var(--g); }
+@media (max-width: 960px) { .navca { display: none; } .ca code { font-size: 12px; } }

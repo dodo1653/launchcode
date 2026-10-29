@@ -275,3 +275,6 @@ function draw(now) {
   requestAnimationFrame(draw)
 }
 requestAnimationFrame(draw)
+
+// the contract address: click to copy
+$('ca').onclick = () => navigator.clipboard?.writeText($('ca').dataset.ca).then(() => toast('$LAUNCHCODE contract address copied'))
