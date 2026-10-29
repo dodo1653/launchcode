@@ -59,7 +59,7 @@ function flap(t0, amp = .05) { for (let k = 0; k < .018 * SR; k++) { const tt = 
 function clockTick(t0, hi, amp = .2) { const f = hi ? 2100 : 1500; for (let k = 0; k < .06 * SR; k++) { const tt = k / SR; add(t0 * SR + k, (Math.sin(tt * TAU * f) * .6 + noise() * .4) * Math.exp(-tt * 70) * amp, 0, .3) } }
 // 1. the macro pass: a low drone, a slow riser
 pad(0.0, 2.8, [40, 47, 52], .02, 1.0, .2); riser(0.6, 2.1, .12); sub(0.3, 2.4, 28, .08)
-// 2. the cover: a heavy click as it opens, a whine, the LED
+// 2. the cover: a heavy click as it opens, the LED
 thud(2.75, .5); click(2.75, .35); click(2.95, .2); whoosh(2.7, .45, .08); sub(2.75, .9, 28, .17)
 pluck(3.45, 88, .05, 5, 0, .5); pluck(3.52, 88, .04, 5, 0, .5); pad(3.4, 4.6, [52, 59, 64], .015, .2, .4)
 // 3. the product: a tight groove; pops as the tiles rise; the card seals, then fires
