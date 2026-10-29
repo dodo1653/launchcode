@@ -23,13 +23,22 @@
   <div class="stage" id="stage">
     <canvas id="net"></canvas>
     <img class="obj" id="obj" src="assets/switch.png" alt="">
-    <div class="node out" id="outNode"><span class="pill"><i></i></span><div><b>pump.fun</b><span id="outTxt">fires the second it hits</span></div></div>
   </div>
   <div class="eyebrow center">armed launches for pump.fun</div>
   <h1 class="headline">First to every narrative.<br><span>Armed before it breaks.</span></h1>
   <p class="sub">Sign your pump.fun launch now and pick a trigger: words in a headline, a wallet moving, a price, a graduation, a time. The second it hits, LAUNCHCODE fires it. The coin stays sealed until then, so nobody can launch it first.</p>
   <div class="cta"><button class="go big" id="bArm2">Arm a launch</button><a class="ghost" href="#fired">See what fired</a></div>
-  <div class="stat" id="stat"><span class="eyebrow">watching</span><b id="sFeeds">7</b><span>newsrooms</span><i></i><b id="sArmed">–</b><span>armed</span><i></i><span>SOL</span><b id="sSol">–</b></div>
+  <div class="relay" id="relay">
+    <div class="rh"><span class="pulse"><i></i></span><b>Relay</b><span class="dim" id="rState">connecting to Solana…</span><a class="dim" href="#how">what is this?</a></div>
+    <div class="rg">
+      <div><span>Solana slot</span><b id="rSlot">–</b><small id="rSlotAgo">&nbsp;</small></div>
+      <div><span>launches seen · 1h</span><b id="rLaunch">–</b><small id="rNewest">&nbsp;</small></div>
+      <div><span>newsrooms read</span><b id="rNews">–</b><small id="rNewsAgo">&nbsp;</small></div>
+      <div><span>SOL · Coinbase</span><b id="rSol">–</b><small id="rSolAgo">&nbsp;</small></div>
+      <div><span>codes armed</span><b id="rArmed">–</b><small>checked every few seconds</small></div>
+    </div>
+    <a class="rfeed" id="rFeed" target="_blank" rel="noopener"><span class="htag">newest headline</span><span id="rHead">reading the newsrooms…</span></a>
+  </div>
 </section>
 
 <section class="sec" id="armed">

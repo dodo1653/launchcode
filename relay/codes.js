@@ -51,7 +51,7 @@ export function parseRss(xml, src) {
 
 export function createCodes({ feed, store, rpc, sendRaw, getSol }) {
   const armed = new Map()            // id -> code
-  let fired = [], news = [], busy = false, feedTurn = 0
+  let fired = [], news = [], busy = false, feedTurn = 0, newsAt = 0, read = 0
   const seen = new Set()             // headlines already seen (title|src)
   const short = (w) => w.slice(0, 4) + "…" + w.slice(-4)
   const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms))
@@ -134,11 +134,13 @@ export function createCodes({ feed, store, rpc, sendRaw, getSol }) {
 
   // ---------------------------------------------------------------- watching
   async function pollNews() {
+    if (Date.now() - newsAt < 6000) return
     const want = new Set(); for (const c of armed.values()) if (c.trigger.kind === "news") want.add(c.trigger.words.join(" "))
     // three of the fixed feeds a tick (round robin), plus Google News for one armed phrase
     const batch = [0, 1, 2].map((i) => FEEDS[(feedTurn + i) % FEEDS.length]); feedTurn = (feedTurn + 3) % FEEDS.length
     const phrases = [...want]; if (phrases.length) { const q = phrases[(feedTurn / 3 | 0) % phrases.length]; batch.push(["Google News", `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`]) }
     const got = await Promise.all(batch.map(([src, url]) => fetch(url, { headers: { "user-agent": "Mozilla/5.0 (launchcode relay)" } }).then((r) => r.text()).then((x) => parseRss(x, src)).catch(() => [])))
+    newsAt = Date.now(); read += got.reduce((a, x) => a + x.length, 0)
     const fresh = []
     for (const it of got.flat()) {
       const key = it.title + "|" + it.src; if (seen.has(key)) continue
@@ -179,7 +181,7 @@ export function createCodes({ feed, store, rpc, sendRaw, getSol }) {
       for (const c of [...armed.values()]) if (Date.now() > c.expires) { armed.delete(c.id); fired.unshift({ id: c.id, dev: short(c.wallet), trigger: describe(c.trigger), kind: c.trigger.kind, expired: true, detected: Date.now() }) }
       await pollPrices()
       if (ticks % 2 === 0) await pollWallets()
-      if (ticks % 3 === 0 || [...armed.values()].some((c) => c.trigger.kind === "news")) await pollNews()
+      await pollNews()
       ticks++
     } catch (e) { console.log("codes tick", String(e)) } finally { busy = false }
   }
@@ -194,7 +196,7 @@ export function createCodes({ feed, store, rpc, sendRaw, getSol }) {
       now: Date.now(), armed: [...armed.values()].sort((a, b) => b.armedAt - a.armedAt).map(sealed),
       fired: fired.slice(0, 60).map((f) => ({ ...f, live: f.mint && !f.failed ? live(f.mint) : null })),
       news: news.slice().sort((a, b) => (b.pub || 0) - (a.pub || 0)).slice(0, 12).map((n) => ({ title: n.title, src: n.src, link: n.link, pub: n.pub })), grads: grads.slice(-6).reverse(),
-      feeds: FEEDS.map((f) => f[0]),
+      feeds: FEEDS.map((f) => f[0]), newsAt, read,
     }
   }
   return { arm, tick, state, save, restore, nextWake, describe, parseRss }

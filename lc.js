@@ -43,7 +43,7 @@ function reasonText(f) {
 }
 function paint() {
   $('liveDot').className = st.live ? '' : 'off'; $('liveTxt').textContent = st.live ? 'watching' : 'reconnecting'
-  $('sFeeds').textContent = (st.feeds || []).length || 7; $('sArmed').textContent = st.armed.length; $('sSol').textContent = sol ? '$' + sol.toFixed(2) : '–'
+  paintRelay()
   $('armedMeta').textContent = st.armed.length ? `${st.armed.length} armed` : ''
   $('armedList').innerHTML = st.armed.length ? st.armed.map((c) => `<div class="card"><div class="hd"><span class="seal">${ICON.seal}</span>
       <div><div class="trg">${esc(c.trigger)}<small>sealed · dev ${esc(c.dev)}${c.buy ? ' · buys ' + c.buy + ' SOL' : ''}</small></div></div>
@@ -55,7 +55,6 @@ function paint() {
       <div><span class="tk">$${esc(f.symbol)}</span> <span class="nm">${esc(f.name)}</span><div class="ds">${esc(f.trigger)}</div></div>
       <div class="why">${esc(reasonText(f))}</div><span class="mono ${f.failed ? 'red' : 'up'}">${f.failed ? esc(f.failed) : f.ms != null ? (f.ms / 1000).toFixed(1) + 's to land' : ''}</span><span class="mono dim hm">${f.live ? mcf(f.live.mc) : ''}</span></a>`).join('')
     : '<div class="empty">Nothing has fired yet. The first one shows here with what tripped it.</div>'
-  heroTiles()
 }
 pull(); setInterval(pull, 5000)
 
@@ -164,24 +163,38 @@ $('fGo').onclick = async () => {
   note('Two signatures the first time (the nonce account, then the launch), one after that.'); b.disabled = false
 }
 
-// ---------------------------------------------------------------- the hero: triggers flow into the switch; when one trips, the launch fires
-const stage = $('stage'), net = $('net'), nctx = net.getContext('2d'), obj = $('obj'), outNode = $('outNode')
-const SW = 1120, SH = 380, IN = [440, 200], OUTA = [690, 200], OUT = [900, 200]
-const SLOTS = [[170, 52], [128, 132], [114, 212], [128, 292], [176, 360]]
-Object.assign(outNode.style, { left: OUT[0] + 'px', top: OUT[1] + 'px' })
-const tiles = SLOTS.map(([x, y]) => { const el = document.createElement('div'); el.className = 'node trig'; Object.assign(el.style, { left: x + 'px', top: y + 'px' }); stage.appendChild(el); return el })
-function heroTiles() {
-  const n = st?.news?.[0], g = st?.grads?.[0], a = st?.armed?.find((c) => c.kind === 'wallet')
-  const items = [
-    ['news', n ? n.title : 'waiting for the next headline', n ? n.src + ' · ' + ago(n.pub || Date.now()) + ' ago' : 'seven newsrooms'],
-    ['price', sol ? 'SOL $' + sol.toFixed(2) : 'SOL price', 'any level you set'],
-    ['pump', g ? '$' + g.symbol + ' graduated' : 'a coin graduates', g ? 'pump.fun · just now' : 'or hits a market cap'],
-    ['wallet', a ? a.trigger : 'a wallet makes its move', 'any address you name'],
-    ['time', 'at ' + hhmm(Math.ceil(Date.now() / 3600_000) * 3600_000), 'or any time you pick'],
-  ]
-  tiles.forEach((el, i) => { const [k, b, s] = items[i]; el.dataset.k = k; el.innerHTML = `<span class="av">${ICON[k]}</span><div><b>${esc(b)}</b><span>${esc(s)}</span></div>` })
+// ---------------------------------------------------------------- the relay, live: what it sees on the chain right now
+const fmtN = (n) => Number(n).toLocaleString('en-US')
+let shownSlot = 0
+function paintRelay() {
+  const ch = st.chain || {}, ok = st.live && ch.slot && Date.now() - ch.slotAt < 20_000
+  document.querySelector('.rh .pulse').className = 'pulse' + (ok ? '' : ' off')
+  $('rState').textContent = ok ? 'live on Solana mainnet, reading every pump.fun launch' : 'reconnecting to Solana…'
+  $('rLaunch').textContent = fmtN(ch.launches1h || 0)
+  $('rNews').textContent = (st.feeds || []).length; $('rArmed').textContent = st.armed.length
+  $('rSol').textContent = sol ? '$' + sol.toFixed(2) : '–'
+  const n = (st.news || [])[0]
+  if (n) { $('rHead').textContent = `“${n.title}” · ${n.src}`; $('rFeed').href = n.link || '#' }
 }
-heroTiles()
+setInterval(() => {
+  if (!st?.chain) return
+  const ch = st.chain
+  // the slot advances about every 400 ms between polls; the figure catches up with each poll
+  const est = ch.slot ? ch.slot + Math.floor((Date.now() - ch.slotAt) / 400) : 0
+  if (est && est !== shownSlot) { const b = $('rSlot'); b.textContent = fmtN(est); b.classList.add('tick'); setTimeout(() => b.classList.remove('tick'), 180); shownSlot = est }
+  $('rSlotAgo').textContent = ch.slotAt ? `last block seen ${ago(ch.slotAt)} ago` : ''
+  $('rNewest').textContent = ch.newest ? `newest $${ch.newest.symbol} · ${ago(ch.newest.at)} ago` : ''
+  $('rNewsAgo').textContent = st.newsAt ? `checked ${ago(st.newsAt)} ago · ${fmtN(st.read || 0)} read` : ''
+  $('rSolAgo').textContent = ch.solAt ? `updated ${ago(ch.solAt)} ago` : ''
+}, 200)
+
+// ---------------------------------------------------------------- the hero: triggers on hairlines into the switch; one trips, the launch goes to pump.fun
+const stage = $('stage'), net = $('net'), nctx = net.getContext('2d'), obj = $('obj')
+const SW = 1120, SH = 360, CEN = [560, 175]
+const TRIG = [['news', 330, 70, 'a headline'], ['wallet', 205, 190, 'a wallet moves'], ['price', 360, 300, 'a price'], ['pump', 840, 62, 'a coin graduates'], ['time', 975, 300, 'a time']]
+const PUMP = [930, 182]
+const tiles = TRIG.map(([k, x, y, lab]) => { const el = document.createElement('div'); el.className = 'tile'; Object.assign(el.style, { left: x + 'px', top: y + 'px' }); el.innerHTML = ICON[k] + `<span class="lab">${lab}</span>`; stage.appendChild(el); return el })
+const pumpTile = document.createElement('div'); pumpTile.className = 'tile pump'; Object.assign(pumpTile.style, { left: PUMP[0] + 'px', top: PUMP[1] + 'px' }); pumpTile.innerHTML = '<i></i><span class="lab">pump.fun</span>'; stage.appendChild(pumpTile)
 function fitStage() {
   const s = Math.min(1, (innerWidth - 16) / SW); stage.style.transform = `scale(${s})`; stage.style.marginBottom = `${-(1 - s) * SH}px`
   const d = devicePixelRatio || 1; net.width = SW * d; net.height = SH * d; nctx.setTransform(d, 0, 0, d, 0, 0)
@@ -190,24 +203,24 @@ addEventListener('resize', fitStage); fitStage()
 const bez = (p0, c1, c2, p1, t) => { const u = 1 - t; return [u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p1[0], u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p1[1]] }
 const curve = (a, b) => { const mx = (a[0] + b[0]) / 2; return [a, [mx, a[1]], [mx, b[1]], b] }
 const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - (1 - x) ** 3)
-const PERIOD = 3600
+const PERIOD = 3800
 let lastCyc = -1
 function draw(now) {
   nctx.clearRect(0, 0, SW, SH)
-  const cyc = Math.floor(now / PERIOD), t = now % PERIOD, hot = cyc % SLOTS.length
-  const glow = (x, y, r, col) => { const g = nctx.createRadialGradient(x, y, 0, x, y, r * 5); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); nctx.fillStyle = g; nctx.beginPath(); nctx.arc(x, y, r * 5, 0, 7); nctx.fill(); nctx.fillStyle = '#fff'; nctx.beginPath(); nctx.arc(x, y, r * 0.6, 0, 7); nctx.fill() }
+  const cyc = Math.floor(now / PERIOD), t = now % PERIOD, hot = [0, 2, 3, 1, 4][cyc % 5]
+  const glow = (x, y, r, col) => { const g = nctx.createRadialGradient(x, y, 0, x, y, r * 5); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)'); nctx.fillStyle = g; nctx.beginPath(); nctx.arc(x, y, r * 5, 0, 7); nctx.fill(); nctx.fillStyle = '#fff'; nctx.beginPath(); nctx.arc(x, y, r * 0.55, 0, 7); nctx.fill() }
   const line = (c, col, w) => { nctx.strokeStyle = col; nctx.lineWidth = w; nctx.beginPath(); nctx.moveTo(...c[0]); nctx.bezierCurveTo(...c[1], ...c[2], ...c[3]); nctx.stroke() }
-  SLOTS.forEach(([x, y], i) => {
-    const c = curve([x + 140, y], IN), on = i === hot
-    line(c, on ? 'rgba(255,181,71,.6)' : 'rgba(255,255,255,.1)', on ? 1.6 : 1.1)
-    if (on && t < 1100) glow(...bez(...c, ease(t / 1100)), 2.6, 'rgba(255,181,71,.7)')
-    tiles[i].classList.toggle('hot', on && t < 1600)
+  TRIG.forEach(([k, x, y], i) => {
+    const from = [x + (x < CEN[0] ? 27 : -27), y], c = curve(from, [CEN[0] + (x < CEN[0] ? -60 : 60), CEN[1] + (y - CEN[1]) * 0.15]), on = i === hot
+    line(c, on ? 'rgba(255,181,71,.45)' : 'rgba(255,255,255,.12)', 1)
+    if (on && t < 1000) glow(...bez(...c, ease(t / 1000)), 2.2, 'rgba(255,181,71,.7)')
+    tiles[i].classList.toggle('hot', on && t < 1500)
   })
-  const o = curve(OUTA, [OUT[0] - 80, OUT[1]]), firing = t > 1100 && t < 2600
-  line(o, firing ? 'rgba(255,59,47,.9)' : 'rgba(255,59,47,.35)', firing ? 2.4 : 1.5)
-  if (t >= 1100 && t < 1600) glow(...bez(...o, ease((t - 1100) / 500)), 3.8, 'rgba(255,59,47,.8)')
-  if (cyc !== lastCyc && t > 1100) { lastCyc = cyc; obj.classList.remove('hit'); void obj.offsetWidth; obj.classList.add('hit') }
-  outNode.classList.toggle('fire', firing)
+  const o = curve([CEN[0] + 70, CEN[1] + 6], [PUMP[0] - 27, PUMP[1]]), firing = t > 1000 && t < 2600
+  line(o, firing ? 'rgba(74,222,128,.7)' : 'rgba(255,255,255,.12)', firing ? 1.6 : 1)
+  if (t >= 1000 && t < 1500) glow(...bez(...o, ease((t - 1000) / 500)), 2.8, 'rgba(74,222,128,.8)')
+  if (cyc !== lastCyc && t > 1000) { lastCyc = cyc; obj.classList.remove('hit'); void obj.offsetWidth; obj.classList.add('hit') }
+  pumpTile.classList.toggle('fire', firing)
   requestAnimationFrame(draw)
 }
 requestAnimationFrame(draw)
